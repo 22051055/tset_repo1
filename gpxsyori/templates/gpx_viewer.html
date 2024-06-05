@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GPX Viewer</title>
+    <meta charset="utf-8">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>GPX Viewer</h1>
+    <div id="gpx_graph"></div>
+
+    <script>
+        // ページロード時にグラフを表示
+        window.addEventListener('DOMContentLoaded', (event) => {
+            Plotly.newPlot('gpx_graph', [], {
+                title: '標高グラフ',
+                xaxis: {
+                    title: '距離 (km)'
+                },
+                yaxis: {
+                    title: '標高 (m)'
+                }
+            });
+            Plotly.d3.csv('/data.csv', function (err, rows) {
+                function unpack(rows, key) {
+                    return rows.map(function (row) { return row[key]; });
+                }
+                var data = [{
+                    x: unpack(rows, 'distance_km'),
+                    y: unpack(rows, 'ele'),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: '標高'
+                }];
+                Plotly.newPlot('gpx_graph', data);
+            });
+        });
+    </script>
+</body>
+</html>
+
