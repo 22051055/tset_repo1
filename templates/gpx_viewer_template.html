@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ html_title }}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        #map, #graph {
+            width: 100%;
+            height: 50vh;
+        }
+        #slider-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 0px;
+        }
+        #slider {
+            width: 100%;
+        }        
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" />
+</head>
+<body>
+    <div id="map"></div>
+    <div id="graph" style="touch-action: manipulation;"></div>
+    <div id="slider-container">
+        <input type="range" id="slider" min="0" max="100" value="0" />
+    </div>
+    <div>
+        <a href="/uploads/{{ output_html }}" download>GPXファイルをダウンロード</a>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // 地図の初期化
+            var map = L.map('map').setView([{{ initial_latitude }}, {{ initial_longitude }}], 14);
+            L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
+            }).addTo(map);
+
+            // GPXトラックの表示
+            var latlngs = [
+                {% for point in gpx_points %}
+                    [{{ point.latitude }}, {{ point.longitude }}],
+                {% endfor %}
+            ];
+            var polyline = L.polyline(latlngs, {color: 'blue'}).addTo(map);
+
+            // 標高グラフの初期化
+            var graphDiv = document.getElementById('graph');
+            Plotly.newPlot(graphDiv, [{
+                x: [
+                    {% for point in gpx_points %}
+                        {{ loop.index0 }},
+                    {% endfor %}
+                ],
+                y: [
+                    {% for point in gpx_points %}
+                        {{ point.elevation }},
+                    {% endfor %}
+                ],
+                type: 'scatter',
+                mode: 'lines'
+            }]);
+
+            // マーカーの初期化
+            var marker = L.marker(latlngs[0]).addTo(map);
+
+            // スライダーの設定
+            var slider = document.getElementById('slider');
+            slider.max = latlngs.length - 1;
+
+            // マーカーとビューを更新する共通関数
+            function updateMarkerAndView(idx) {
+                var latlng = latlngs[idx];
+                marker.setLatLng(latlng);
+                map.setView(latlng, 15);
+                Plotly.Fx.hover('graph', [{
+                    curveNumber: 0,
+                    pointNumber: idx
+                }]);
+            }
+            slider.addEventListener('input', function() {
+                var idx = slider.value;
+                updateMarkerAndView(idx);
+            });
+
+            // グラフのホバーイベント
+            graphDiv.on('plotly_hover', function(eventdata) {
+                var idx = eventdata.points[0].pointNumber;
+                slider.value = idx;
+                updateMarkerAndView(idx);
+            });
+
+            // グラフのクリックイベント
+            graphDiv.on('plotly_click', function(eventdata) {
+                var idx = eventdata.points[0].pointNumber;
+                slider.value = idx;
+                updateMarkerAndView(idx);
+            });
+        });
+    </script>
+</body>
+</html>
+

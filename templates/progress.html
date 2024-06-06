@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress</title>
+</head>
+<body>
+    <h1>Processing Completed</h1>
+    <p>Your file has been processed. Click the button below to view the result.</p>
+    <button id="viewButton">View Result</button>
+
+    <script>  
+    // View button click event handler
+    document.getElementById('viewButton').addEventListener('click', function() {
+        // Replace 'generated_file_path' with the actual path of the generated HTML file
+        var generatedFilePath = "{{ filename }}"; // Use the generated file path from Flask
+        // Redirect to the generated HTML file via Flask route
+        window.location.href = "/redirect_to_generated_file/" + encodeURIComponent(generatedFilePath);
+    });
+    </script>
+</body>
+</html>
+

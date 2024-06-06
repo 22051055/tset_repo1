@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GPX Upload</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+        <input type="file" name="file" id="file" required><br><br>
+        <label for="save_filename">保存するファイル名:</label>
+        <input type="text" name="save_filename" id="save_filename" placeholder="保存するファイル名"><br><br>
+        <label for="gpx_name">GPXトラック名:</label>
+        <input type="text" name="gpx_name" id="gpx_name" placeholder="GPXトラック名"><br><br>
+        <label for="html_title">HTMLタイトル:</label>
+        <input type="text" name="html_title" id="html_title" placeholder="HTMLタイトル" required><br><br>
+        <input type="submit" value="アップロード">
+    </form>
+</body>
+</html>
+
