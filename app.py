@@ -1,35 +1,59 @@
-from flask import Flask, render_template, request, redirect, url_for, render_template_string
 import os
-import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+import gpxpy
+import gpxpy.gpx
 import requests
+from flask import Flask, render_template, request, redirect, url_for
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads/'
 
-UPLOAD_FOLDER = '/home/ubuntu/project1/uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+def get_elevation(latitude, longitude):
+    url = f'https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon={longitude}&lat={latitude}'
+    response = requests.get(url)
+    if response.status_code == 200:
+        try:
+            elevation_data = response.json()
+            if 'elevation' in elevation_data:
+                return elevation_data['elevation']
+        except ValueError:
+            print(f"Error parsing JSON response for ({latitude}, {longitude}): {response.text}")
+    else:
+        print(f"Error fetching elevation data for ({latitude}, {longitude}): HTTP {response.status_code}")
+    return None
 
-def calculate_progress(file_size, total_bytes):
-    if total_bytes <= 0:
-        return 0
-    return int((total_bytes / file_size) * 100)
+def process_gpx(file, save_filename, gpx_name, html_title):
+    gpx = gpxpy.parse(file)
 
-def convert_to_jma_elevation(latitude, longitude):
-    elevation_api_url = 'https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php'
-    params = {
-        'lon': longitude,
-        'lat': latitude,
-        'outtype': 'JSON'
-    }
-    try:
-        response = requests.get(elevation_api_url, params=params)
-        response.raise_for_status()
-        elevation_data = response.json()
-        elevation = elevation_data['elevation']
-        return elevation
-    except (requests.RequestException, ValueError, KeyError) as e:
-        print(f"Failed to get elevation for point ({latitude}, {longitude}): {e}")
-        return None
+    # GPXファイルの処理
+    for track in gpx.tracks:
+        for segment in track.segments:
+            for point in segment.points:
+                # 各座標の標高を取得し、GPXファイルの標高情報を書き換える
+                elevation = get_elevation(point.latitude, point.longitude)
+                if elevation is not None:
+                    print(f"Setting elevation for ({point.latitude}, {point.longitude}) to {elevation}")
+                    point.elevation = elevation
+                else:	
+                    print(f"Failed to get elevation for point ({point.latitude}, {point.longitude})")
+
+    # GPXファイル内の<extensions>要素を削除
+    for track in gpx.tracks:
+        for segment in track.segments:
+            for point in segment.points:
+                point.extensions = None
+
+    gpx_output_name = f"processed_{save_filename}.gpx"
+    output_gpx_path = os.path.join(app.config['UPLOAD_FOLDER'], gpx_output_name)
+    with open(output_gpx_path, 'w') as f:
+        f.write(gpx.to_xml())
+
+    gpx_points = [{
+        'latitude': point.latitude,
+        'longitude': point.longitude,
+        'elevation': point.elevation
+    } for track in gpx.tracks for segment in track.segments for point in segment.points]
+
+    return output_gpx_path, gpx_output_name, gpx_points
 
 @app.route('/')
 def index():
@@ -37,89 +61,27 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return redirect(request.url)
-    file = request.files['file']
-    if file.filename == '':
-        return redirect(request.url)
+    if request.method == 'POST':
+        uploaded_file = request.files['file']
+        if uploaded_file.filename != '':
+            save_filename = request.form['save_filename']
+            gpx_name = request.form['gpx_name']
+            html_title = request.form['html_title']
+            gpx_output_path, gpx_output_name, gpx_points = process_gpx(uploaded_file, save_filename, gpx_name, html_title)
+            output_html = f"{gpx_output_name}_viewer.html"  # 出力するHTMLファイル名
+            output_html_path = os.path.join(app.config['UPLOAD_FOLDER'], output_html)
+            with open(output_html_path, 'w') as f:
+                f.write(render_template('gpx_viewer_template.html', html_title=html_title, initial_latitude=gpx_points[0]['latitude'], initial_longitude=gpx_points[0]['longitude'], gpx_points=gpx_points, output_html=output_html))
+            return redirect(url_for('processing_completed', gpx_output_name=output_html))
+    return redirect(url_for('index'))
 
-    uploaded_filename = file.filename
-    save_filename = request.form.get('save_filename', uploaded_filename)
-    save_filename = save_filename if save_filename.endswith('.gpx') else save_filename + '.gpx'
-    save_path = os.path.join(app.config['UPLOAD_FOLDER'], save_filename)
-    file.save(save_path)
+@app.route('/processing_completed/<gpx_output_name>')
+def processing_completed(gpx_output_name):
+    return render_template('progress.html', filename=gpx_output_name)
 
-    gpx_name = request.form.get('gpx_name', 'Default Track Name')
-    html_title = request.form.get('html_title', 'HTML Title')
-
-    output_html = process_gpx(save_path, uploaded_filename, gpx_name, html_title)
-    return redirect(url_for('progress', filename=output_html))
-
-@app.route('/progress/<path:filename>')  # パス変数を使用してファイルパスを受け取る
-def progress(filename):
-    # ファイル名からファイルの名前部分を抽出
-    filename = os.path.basename(filename)
-    return render_template('progress.html', filename=filename)
-
-# progress.html ページでリダイレクトを行うためのルート
-@app.route('/redirect_to_generated_file/<path:file_path>')
-def redirect_to_generated_file(file_path):
-    # 生成された HTML ファイルへのパスを受け取ってリダイレクト
-    return redirect(url_for('uploads', filename=file_path), code=302)
-
-def process_gpx(input_gpx, uploaded_filename, gpx_name, html_title):
-    # GPX ファイルの解析
-    tree = ET.parse(input_gpx)
-    root = tree.getroot()
-
-    for elem in root.iter():
-        if '}' in elem.tag:
-            elem.tag = elem.tag.split('}', 1)[1]
-
-    trk_name_elem = root.find('.//trk/name')
-    if trk_name_elem is not None:
-        trk_name_elem.text = gpx_name
-    else:
-        trk = root.find('.//trk')
-        if trk is not None:
-            new_name_elem = ET.SubElement(trk, 'name')
-            new_name_elem.text = gpx_name
-
-    latlngs = []
-    gpx_points = []
-
-    for trkpt in root.findall('.//trkpt'):
-        lat = float(trkpt.attrib['lat'])
-        lon = float(trkpt.attrib['lon'])
-        elevation = convert_to_jma_elevation(lat, lon)
-        ele = trkpt.find('ele')
-        if ele is not None and elevation is not None:
-            ele.text = str(elevation)
-        latlngs.append({'latitude': lat, 'longitude': lon, 'elevation': elevation})
-        gpx_points.append({'latitude': lat, 'longitude': lon, 'elevation': elevation})
-
-    output_filename = input_gpx[:-4] + '_modified.gpx'
-    output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
-    tree.write(output_path)
-
-    initial_latitude = latlngs[0]['latitude']
-    initial_longitude = latlngs[0]['longitude']
-
-    output_html = input_gpx[:-4] + '_viewer.html'
-
-    with open('templates/gpx_viewer_template.html', 'r') as template_file:
-        template_content = template_file.read()
-        rendered_html = render_template_string(template_content, html_title=html_title, 
-                                                initial_latitude=initial_latitude, initial_longitude=initial_longitude,
-                                                gpx_points=gpx_points, output_html=output_html)
-
-    output_html_path = os.path.join(app.config['UPLOAD_FOLDER'], output_html)
-
-    with open(output_html_path, 'w') as html_output_file:
-        html_output_file.write(rendered_html)
-
-    return output_html_path  # ファイルパスを返す
+@app.route('/redirect_to_generated_file/<path:filename>')
+def redirect_to_generated_file(filename):
+    return redirect(url_for('static', filename=os.path.join('uploads', filename)))
 
 if __name__ == '__main__':
     app.run(debug=True)
-
