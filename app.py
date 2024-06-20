@@ -1,8 +1,8 @@
 import os
-import gpxpy
-import gpxpy.gpx
 import requests
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from lxml import etree as ET
+import gpxpy
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
@@ -21,8 +21,38 @@ def get_elevation(latitude, longitude):
         print(f"Error fetching elevation data for ({latitude}, {longitude}): HTTP {response.status_code}")
     return None
 
+def add_namespace_to_gpx(xml_content):
+    try:
+        # XMLをパース
+        tree = ET.ElementTree(ET.fromstring(xml_content))
+        root = tree.getroot()
+
+        # 名前空間が定義されているか確認
+        nsmap = root.nsmap
+        if 'gpxtpx' not in nsmap:
+            nsmap['gpxtpx'] = 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1'
+            new_root = ET.Element(root.tag, nsmap=nsmap)
+            new_root[:] = root[:]
+            xml_content = ET.tostring(new_root, xml_declaration=True, encoding='utf-8')
+
+    except ET.XMLSyntaxError as e:
+        print(f"GPXファイルのパース中にエラーが発生しました: {str(e)}")
+        return None
+
+    return xml_content
+
 def process_gpx(file, save_filename, gpx_name, html_title):
-    gpx = gpxpy.parse(file)
+    # ファイルを読み込んで名前空間を追加
+    xml_content = file.read()
+    xml_content = add_namespace_to_gpx(xml_content)
+    if xml_content is None:
+        return None, None, None
+
+    try:
+        gpx = gpxpy.parse(xml_content)
+    except gpxpy.gpx.GPXXMLSyntaxException as e:
+        print(f"GPXファイルのパース中にエラーが発生しました: {str(e)}")
+        return None, None, None
 
     # GPXファイルの処理
     for track in gpx.tracks:
@@ -44,8 +74,8 @@ def process_gpx(file, save_filename, gpx_name, html_title):
 
     gpx_output_name = f"processed_{save_filename}.gpx"
     output_gpx_path = os.path.join(app.config['UPLOAD_FOLDER'], gpx_output_name)
-    with open(output_gpx_path, 'w') as f:
-        f.write(gpx.to_xml())
+    with open(output_gpx_path, 'wb') as f:
+        f.write(gpx.to_xml().encode('utf-8'))
 
     gpx_points = [{
         'latitude': point.latitude,
@@ -68,11 +98,13 @@ def upload_file():
             gpx_name = request.form['gpx_name']
             html_title = request.form['html_title']
             gpx_output_path, gpx_output_name, gpx_points = process_gpx(uploaded_file, save_filename, gpx_name, html_title)
+            if gpx_output_path is None:	
+                return redirect(url_for('index'))            
             output_html = f"{gpx_output_name}_viewer.html"  # 出力するHTMLファイル名
             output_html_path = os.path.join(app.config['UPLOAD_FOLDER'], output_html)
             with open(output_html_path, 'w') as f:
-                f.write(render_template('gpx_viewer_template.html', html_title=html_title, initial_latitude=gpx_points[0]['latitude'], initial_longitude=gpx_points[0]['longitude'], gpx_points=gpx_points, output_html=output_html))
-            return redirect(url_for('processing_completed', gpx_output_name=output_html))
+                f.write(render_template('gpx_viewer_template.html', html_title=html_title, initial_latitude=gpx_points[0]['latitude'], initial_longitude=gpx_points[0]['longitude'], gpx_points=gpx_points, output_html=output_html, gpx_output_name=gpx_output_name))
+            return redirect(url_for('processing_completed', gpx_output_name=gpx_output_name))
     return redirect(url_for('index'))
 
 @app.route('/processing_completed/<gpx_output_name>')
@@ -82,6 +114,11 @@ def processing_completed(gpx_output_name):
 @app.route('/redirect_to_generated_file/<path:filename>')
 def redirect_to_generated_file(filename):
     return redirect(url_for('static', filename=os.path.join('uploads', filename)))
+
+# ファイルを提供するためのルートを設定
+@app.route('/uploads/<path:filename>')
+def download_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
     app.run(debug=True)
