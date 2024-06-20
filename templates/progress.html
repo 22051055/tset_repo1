@@ -13,12 +13,10 @@
     <script>  
     // View button click event handler
     document.getElementById('viewButton').addEventListener('click', function() {
-    var generatedFilePath = "{{ filename }}"; // Use the generated file path from Flask
+    var generatedFilePath = "{{ filename }}_viewer.html"; // Use the generated file path from Flask
         // Redirect to the generated HTML file via Flask route
-        window.location.href = "/redirect_to_generated_file/" + encodeURIComponent(generatedFilePath);
+        window.location.href = "/uploads/" + encodeURIComponent(generatedFilePath);
     });
     </script>
 </body>
 </html>
-
-
