@@ -1,25 +1,10 @@
 import os
-import requests
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from lxml import etree as ET
 import gpxpy
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
-
-def get_elevation(latitude, longitude):
-    url = f'https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon={longitude}&lat={latitude}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        try:
-            elevation_data = response.json()
-            if 'elevation' in elevation_data:
-                return elevation_data['elevation']
-        except ValueError:
-            print(f"Error parsing JSON response for ({latitude}, {longitude}): {response.text}")
-    else:
-        print(f"Error fetching elevation data for ({latitude}, {longitude}): HTTP {response.status_code}")
-    return None
 
 def add_namespace_to_gpx(xml_content):
     try:
@@ -35,11 +20,15 @@ def add_namespace_to_gpx(xml_content):
             new_root[:] = root[:]
             xml_content = ET.tostring(new_root, xml_declaration=True, encoding='utf-8')
 
+        # 再パース
+        tree = ET.ElementTree(ET.fromstring(xml_content))
+        root = tree.getroot()
+
+        return ET.tostring(root, xml_declaration=True, encoding='utf-8')
+
     except ET.XMLSyntaxError as e:
         print(f"GPXファイルのパース中にエラーが発生しました: {str(e)}")
         return None
-
-    return xml_content
 
 def process_gpx(file, save_filename, gpx_name, html_title):
     # ファイルを読み込んで名前空間を追加
@@ -53,18 +42,6 @@ def process_gpx(file, save_filename, gpx_name, html_title):
     except gpxpy.gpx.GPXXMLSyntaxException as e:
         print(f"GPXファイルのパース中にエラーが発生しました: {str(e)}")
         return None, None, None
-
-    # GPXファイルの処理
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for point in segment.points:
-                # 各座標の標高を取得し、GPXファイルの標高情報を書き換える
-                elevation = get_elevation(point.latitude, point.longitude)
-                if elevation is not None:
-                    print(f"Setting elevation for ({point.latitude}, {point.longitude}) to {elevation}")
-                    point.elevation = elevation
-                else:	
-                    print(f"Failed to get elevation for point ({point.latitude}, {point.longitude})")
 
     # GPXファイル内の<extensions>要素を削除
     for track in gpx.tracks:
@@ -98,7 +75,7 @@ def upload_file():
             gpx_name = request.form['gpx_name']
             html_title = request.form['html_title']
             gpx_output_path, gpx_output_name, gpx_points = process_gpx(uploaded_file, save_filename, gpx_name, html_title)
-            if gpx_output_path is None:	
+            if gpx_output_path is None:    
                 return redirect(url_for('index'))            
             output_html = f"{gpx_output_name}_viewer.html"  # 出力するHTMLファイル名
             output_html_path = os.path.join(app.config['UPLOAD_FOLDER'], output_html)
