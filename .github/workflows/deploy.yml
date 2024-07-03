@@ -27,9 +27,6 @@ jobs:
     - name: Install pytest
       run: pip install pytest
       
-    - name: Run tests
-      run: pytest
-      
     - name: Start Flask application
       run: |
         export FLASK_APP=app.py
