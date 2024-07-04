@@ -116,7 +116,7 @@
 
             // 標高データのスムージング
             var elevations = latlngs.map(function(latlng) { return latlng[2]; });
-            var alpha = 0.167; // スムージング係数 (0.0 < alpha < 1.0)
+            var alpha = 1.0; // スムージング係数 (0.0 < alpha < 1.0)
             var smoothedElevations = lowPassFilter(elevations, alpha);
 
             // 累積標高計算
