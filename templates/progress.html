@@ -8,7 +8,7 @@
     <h1>ファイルの処理が完了しました</h1>
     <p>GPXファイル名: {{ gpx_output_name }}</p>
     <p>HTMLファイル名: {{ html_file_name }}</p>
-    <a href="{{ url_for('redirect_to_generated_file', filename=gpx_output_name) }}">GPXファイルをダウンロード</a>
-    <a href="{{ url_for('redirect_to_generated_file', filename=html_file_name) }}">HTMLファイルをダウンロード</a>
+    <a href="{{ url_for('download_file', filename=gpx_output_name) }}">GPXファイルをダウンロード</a>
+    <a href="{{ url_for('download_file', filename=html_file_name) }}">HTMLファイルをダウンロード</a>
 </body>
 </html>
