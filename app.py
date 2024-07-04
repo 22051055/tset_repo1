@@ -91,7 +91,7 @@ def processing_completed(gpx_output_name):
 
 @app.route('/redirect_to_generated_file/<path:filename>')
 def redirect_to_generated_file(filename):
-    return redirect(url_for('static', filename=os.path.join('uploads', filename)))
+    return redirect(url_for('download_file', filename=filename))
 
 # ファイルを提供するためのルートを設定
 @app.route('/uploads/<path:filename>')
