@@ -60,6 +60,11 @@ def process_gpx(file, save_filename, gpx_name, html_title):
         'elevation': point.elevation
     } for track in gpx.tracks for segment in track.segments for point in segment.points]
 
+    output_html = f"{gpx_output_name}_viewer.html"
+    output_html_path = os.path.join(app.config['UPLOAD_FOLDER'], output_html)
+    with open(output_html_path, 'w') as f:
+        f.write(render_template('gpx_viewer_template.html', html_title=html_title, initial_latitude=gpx_points[0]['latitude'], initial_longitude=gpx_points[0]['longitude'], gpx_points=gpx_points, output_html=output_html, gpx_output_name=gpx_output_name))
+        
     return output_gpx_path, gpx_output_name, gpx_points
 
 @app.route('/')
@@ -79,8 +84,18 @@ def upload_file():
                 return redirect(url_for('index'))            
             output_html = f"{gpx_output_name}_viewer.html"  # 出力するHTMLファイル名
             output_html_path = os.path.join(app.config['UPLOAD_FOLDER'], output_html)
+
+            # デバッグ出力
+            print(f"GPX Output Path: {gpx_output_path}")
+            print(f"HTML Output Path: {output_html_path}")
+            
             with open(output_html_path, 'w') as f:
                 f.write(render_template('gpx_viewer_template.html', html_title=html_title, initial_latitude=gpx_points[0]['latitude'], initial_longitude=gpx_points[0]['longitude'], gpx_points=gpx_points, output_html=output_html, gpx_output_name=gpx_output_name))
+
+            # ファイルの存在確認
+            print(f"GPXファイル存在: {os.path.exists(gpx_output_path)}")
+            print(f"HTMLファイル存在: {os.path.exists(output_html_path)}")
+            
             return redirect(url_for('processing_completed', gpx_output_name=gpx_output_name))
     return redirect(url_for('index'))
 
@@ -88,10 +103,6 @@ def upload_file():
 def processing_completed(gpx_output_name):
     html_file_name = f"{gpx_output_name}_viewer.html"
     return render_template('progress.html', gpx_output_name=gpx_output_name, html_file_name=html_file_name)
-
-@app.route('/redirect_to_generated_file/<path:filename>')
-def redirect_to_generated_file(filename):
-    return redirect(url_for('download_file', filename=filename))
 
 # ファイルを提供するためのルートを設定
 @app.route('/uploads/<path:filename>')
