@@ -42,8 +42,8 @@
         <p>最低標高: <span id="min-elevation"></span> m</p>
     </div>
     <div>
-        <a href="{{ url_for('download_file', filename=gpx_output_name) }}" download>GPXファイルをダウンロード</a>
-        <a href="{{ url_for('static', filename='uploads/' + output_html) }}" download>HTMLファイルをダウンロード</a>
+      <a href="{{ url_for('download_file', filename=gpx_output_name) }}" download>GPXファイルをダウンロード</a>
+    　<a href="{{ url_for('download_file', filename=output_html) }}" download>HTMLファイルをダウンロード</a>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
