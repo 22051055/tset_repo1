@@ -86,7 +86,8 @@ def upload_file():
 
 @app.route('/processing_completed/<gpx_output_name>')
 def processing_completed(gpx_output_name):
-    return render_template('progress.html', filename=gpx_output_name)
+    html_file_name = f"{gpx_output_name}_viewer.html"
+    return render_template('progress.html', gpx_output_name=gpx_output_name, html_file_name=html_file_name)
 
 @app.route('/redirect_to_generated_file/<path:filename>')
 def redirect_to_generated_file(filename):
